@@ -14,7 +14,8 @@ import sounddevice as sd
 
 SAMPLE_RATE = 48000
 METER = pyln.Meter(SAMPLE_RATE)
-LOUDNESS = -18  # -65 barely audible (master -12db) TODO: calibration
+LOUDNESS = -18
+CALIB_LOUDNESS = -65
 FMIN = librosa.note_to_hz("A1")  # A0 is lowest key on piano
 FMAX = librosa.note_to_hz("C7")  # C8 is highest key on piano
 UP = b"\x1b[A"
@@ -40,7 +41,7 @@ def fade(y, length=1024):
     y[-length:] *= np.linspace(1, 0, length)
 
 
-def play(waveform="sine", f=440, dur=1, pan=0, meter=METER):
+def play(waveform="sine", f=440, pan=0, dur=1, loudness=LOUDNESS):
     x = np.arange(SAMPLE_RATE * dur) * 2 * math.pi * f / SAMPLE_RATE
     match waveform:
         case "square":
@@ -55,11 +56,18 @@ def play(waveform="sine", f=440, dur=1, pan=0, meter=METER):
             print("unknown waveform type")
             return
     fade(y)
-    loudness = meter.integrated_loudness(y)
-    y = pyln.normalize.loudness(y, loudness, LOUDNESS)
+    y = pyln.normalize.loudness(y, METER.integrated_loudness(y), loudness)
     y = np.column_stack((y * (1 - pan) / 2, y * (1 + pan) / 2))
     sd.play(y, mapping=[1, 2])
     sd.wait()
+
+
+def calibrate(args):
+    print("adjust computer volume until the notes are barely audible")
+    print("ctrl-c to end the loop when done")
+    while True:
+        f = math.exp(random.uniform(math.log(FMIN), math.log(FMAX)))
+        play(args.waveform, f, pan=args.pan, loudness=CALIB_LOUDNESS)
 
 
 def gen_tones(level):
@@ -105,6 +113,12 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
+        "--calib",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="do calibration",
+    )
+    parser.add_argument(
         "--pan",
         type=float,
         default=0,
@@ -122,6 +136,10 @@ def main():
         help="filename to save/append statistics, or 'none'",
     )
     args = parser.parse_args()
+
+    if args.calib:
+        calibrate(args)
+        sys.exit()
 
     print("Press 'up' if the second tone is higher, or 'down' if it is lower.")
     print("Press 'left' to listen to the pair again.")
