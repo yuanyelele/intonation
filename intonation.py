@@ -1,3 +1,4 @@
+import argparse
 import math
 import os
 import random
@@ -13,7 +14,7 @@ import sounddevice as sd
 
 SAMPLE_RATE = 48000
 METER = pyln.Meter(SAMPLE_RATE)
-LOUDNESS = -18  # -65 barely audible (master -12db)
+LOUDNESS = -18  # -65 barely audible (master -12db) TODO: calibration
 FMIN = librosa.note_to_hz("A1")  # A0 is lowest key on piano
 FMAX = librosa.note_to_hz("C7")  # C8 is highest key on piano
 UP = b"\x1b[A"
@@ -22,11 +23,16 @@ LEFT = b"\x1b[D"
 ESC = b"\x1b"
 STEP = 0.9  # ∈ (0, 1)
 DIFF = 20
-STATS_FILE = "stats.npy"
 
 sd.default.device = "system"
 sd.default.channels = 2
 sd.default.samplerate = SAMPLE_RATE
+try:
+    sd.check_output_settings()
+except sd.PortAudioError:
+    # see sounddevice PR #85
+    print("invalid sounddevice settings, try different device/channels/samplerate")
+    sys.exit()()
 
 
 def fade(y, length=1024):
@@ -94,13 +100,43 @@ def report(stats):
 
 
 def main():
-    stats = list(np.load(STATS_FILE)) if os.path.exists(STATS_FILE) else []
-    level = 0
+    parser = argparse.ArgumentParser(
+        description="intonation ear training",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--pan",
+        type=float,
+        default=0,
+        help="panning (-1 for left, 1 for right, 0 for centre)",
+    )
+    parser.add_argument(
+        "--waveform",
+        choices=("square", "sawtooth", "triangle", "sine"),
+        default="triangle",
+        help="type of waveform",
+    )
+    parser.add_argument(
+        "--stats",
+        default="stats.npy",
+        help="filename to save/append statistics, or 'none'",
+    )
+    args = parser.parse_args()
+
+    print("Press 'up' if the second tone is higher, or 'down' if it is lower.")
+    print("Press 'left' to listen to the pair again.")
+    print("Press 'esc' to quit and view the report.")
+
+    stats = []
+    if args.stats != "none" and os.path.exists(args.stats):
+        stats = list(np.load(args.stats))
     tty.setcbreak(sys.stdin.fileno())
+
+    level = 0
     f1, f2, direction = gen_tones(level)
     while True:
-        play("triangle", f1)
-        play("triangle", f2)
+        play(args.waveform, f1, pan=args.pan)
+        play(args.waveform, f2, pan=args.pan)
         key = get_key()
         if key == "esc":
             break
@@ -119,7 +155,7 @@ def main():
     print("stopping")
     os.system("stty sane")
     report(stats)
-    np.save(STATS_FILE, stats)
+    np.save(args.stats, stats)
 
 
 if __name__ == "__main__":
