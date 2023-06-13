@@ -93,6 +93,8 @@ def get_key():
 
 
 def report(stats):
+    if not stats:
+        return
     levels, freqs, colors = np.array(stats).T
     diff = DIFF * STEP**levels
     _, ax = plt.subplots()
@@ -173,7 +175,8 @@ def main():
     print("stopping")
     os.system("stty sane")
     report(stats)
-    np.save(args.stats, stats)
+    if args.stats != "none":
+        np.save(args.stats, stats)
 
 
 if __name__ == "__main__":
