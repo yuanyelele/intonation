@@ -22,6 +22,7 @@ LEFT = b"\x1b[D"
 ESC = b"\x1b"
 STEP = 0.9  # ∈ (0, 1)
 DIFF = 20
+STATS_FILE = "stats.npy"
 
 sd.default.device = "system"
 sd.default.channels = 2
@@ -77,8 +78,8 @@ def get_key():
             return "left"
 
 
-def report(hist):
-    levels, freqs, colors = np.array(hist).T
+def report(stats):
+    levels, freqs, colors = np.array(stats).T
     diff = DIFF * STEP**levels
     _, ax = plt.subplots()
     ax.loglog()
@@ -93,10 +94,7 @@ def report(hist):
 
 
 def main():
-    try:
-        hist = list(np.load("hist.npy"))
-    except Exception:
-        hist = []
+    stats = list(np.load(STATS_FILE)) if os.path.exists(STATS_FILE) else []
     level = 0
     tty.setcbreak(sys.stdin.fileno())
     f1, f2, direction = gen_tones(level)
@@ -111,17 +109,17 @@ def main():
         ans = 1 if key == "up" else -1
         if ans == direction:
             print("✓")
-            hist.append((level, (f1 * f2) ** 0.5, True))
+            stats.append((level, (f1 * f2) ** 0.5, True))
             level += 1
         else:
             print("✗")
-            hist.append((level, (f1 * f2) ** 0.5, False))
+            stats.append((level, (f1 * f2) ** 0.5, False))
             level -= 2
         f1, f2, direction = gen_tones(level)
     print("stopping")
     os.system("stty sane")
-    report(hist)
-    np.save("hist.npy", hist)
+    report(stats)
+    np.save(STATS_FILE, stats)
 
 
 if __name__ == "__main__":
