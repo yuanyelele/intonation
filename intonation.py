@@ -30,10 +30,12 @@ sd.default.channels = 2
 sd.default.samplerate = SAMPLE_RATE
 try:
     sd.check_output_settings()
-except sd.PortAudioError:
+except (ValueError, sd.PortAudioError) as err:
     # see sounddevice PR #85
     print("invalid sounddevice settings, try different device/channels/samplerate")
-    sys.exit()()
+    print(err)
+    print(sd.query_devices())
+    sys.exit()
 
 
 def fade(y, length=1024):
@@ -63,11 +65,14 @@ def play(waveform="sine", f=440, pan=0, dur=1, loudness=LOUDNESS):
 
 
 def calibrate(args):
-    print("adjust computer volume until the notes are barely audible")
+    print("find a quiet spot, adjust the volume until notes are barely audible.")
     print("ctrl-c to end the loop when done")
-    while True:
-        f = math.exp(random.uniform(math.log(FMIN), math.log(FMAX)))
-        play(args.waveform, f, pan=args.pan, loudness=CALIB_LOUDNESS)
+    try:
+        while True:
+            f = math.exp(random.uniform(math.log(FMIN), math.log(FMAX)))
+            play(args.waveform, f, pan=args.pan, loudness=CALIB_LOUDNESS)
+    except KeyboardInterrupt:
+        pass
 
 
 def gen_tones(level):
